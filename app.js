@@ -60,9 +60,9 @@ app.get('/', (req, res) => {
 //Returns a list of courses (including the user that owns each course)
 app.get('/api/courses', asyncHandler(async(req, res) => {
 
-  const allCourses = await Course.findAll({include:{
+  const allCourses = await Course.findAll({include:[{
     model: User
-  }})
+  }]})
   console.log("test", allCourses)
 
   return res.json(allCourses)
