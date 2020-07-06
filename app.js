@@ -41,11 +41,6 @@ app.use(morgan('dev'));
 // parse application/json
 app.use(bodyParser.json()); 
 
-//importing the auth module
-
-
-
-
 //asyncHandler
 //sends error if network connection cannot be established
 function asyncHandler(cb){
@@ -81,14 +76,14 @@ const authenticateUser = asyncHandler(async(req, res, next) => {
   
   if(credentials){
     
-    const user = await User.findAll({
+    const currentUser = await User.findOne({
+      attributes: {exclude: ['createdAt', 'updatedAt']},
       where:{
         emailAddress: credentials.name,
       }
     })
-    const currentUser = user[0]['dataValues']
 
-    if(user){
+    if(currentUser){
       const authenticated = bcryptjs.compareSync(credentials.pass, currentUser.password);
       if(authenticated){
         console.log(`Authentication successful for username: ${currentUser.emailAddress}`);
@@ -117,22 +112,26 @@ const authenticateUser = asyncHandler(async(req, res, next) => {
 USER ROUTES
 *************/
 
-//
+//get the current user
 app.get('/api/users', authenticateUser, asyncHandler(async(req, res) => {
-
-  res.json(req.currentUser)
+  const currentUser = req.currentUser
+  res.json({
+    firstName: currentUser.firstName,
+    lastName: currentUser.lastName,
+    emailAddress: currentUser.emailAddress,
+  })
 
 }))
 
 //create user
 app.post('/api/users', asyncHandler(async(req, res, next) => {
-  console.log(req.body)
   const newUser = req.body
 
   if(newUser.password){
     newUser.password = bcryptjs.hashSync(newUser.password)
   }
 
+  //email validations happen on the model
   try{
     await User.create({
       ...newUser,
@@ -168,19 +167,34 @@ app.get('/', (req, res) => {
 //Returns a list of all courses (including the user that owns each course)
 app.get('/api/courses', asyncHandler(async(req, res) => {
 
-  const allCourses = await Course.findAll({include:[{
+  const allCourses = await Course.findAll({
+    attributes: {exclude: ['createdAt', 'updatedAt', 'userId']},
+    include:[{
     model: User,
-    as: 'user',
-  }]})
+      as: 'user',
+      attributes: {exclude: ['createdAt', 'updatedAt', 'password']},
+    }]
+  })
 
   return res.status(200).json(allCourses)
 
 }))
 
 
-//Return a particular cours
+//Return a particular course
 app.get('/api/courses/:id', asyncHandler(async(req, res, next) => {
-  const particularCourse = await Course.findByPk(req.params.id)
+  const particularCourse = await Course.findOne({
+    attributes: {exclude: ['createdAt', 'updatedAt', 'userId']},
+    include:[{
+    model: User,
+      as: 'user',
+      attributes: {exclude: ['createdAt', 'updatedAt', 'password']},
+    }],
+    where:{
+        id: req.params.id,
+    }
+  })
+
   if(particularCourse){
     return res.json(particularCourse)
   }else{
@@ -199,13 +213,11 @@ app.post('/api/courses', authenticateUser, asyncHandler(async(req, res, next) =>
       createdAt: getDate(),
       updatedAt: getDate(),
     })
-    return res.status(201).location(`/api/courses/${req.params.id}`).json(newCourse)
+    return res.status(201).location(`/api/courses/${req.params.id}`).json({})
   }catch(error){
     let errorsArray = []
     error.errors.forEach(e=> errorsArray.push(e.message))
     error.errorsArray = errorsArray
-
-    console.log(error)
 
     if(error.name==="SequelizeValidationError"){
       error.status = 400
@@ -219,28 +231,36 @@ app.post('/api/courses', authenticateUser, asyncHandler(async(req, res, next) =>
 //update course
 app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next) => {
   const courseToUpdate = await Course.findByPk(req.params.id)
-  console.log(req.body)
-  console.log(courseToUpdate)
+
+  //checks to make sure that there is a course match the id in the url
+  //checks that body of the request is not empty
+  //validation of what it is in the body will be run on the model
   if(courseToUpdate){
-    try{
-      await courseToUpdate.update({
-        ...req.body,
-        updatedAt: getDate(),
-      })
-      return res.status(204).json({});
+    if(Object.entries(req.body).length > 0){
+      try{
+        await courseToUpdate.update({
+          ...req.body,
+          updatedAt: getDate(),
+        })
+        return res.status(204).json({});
 
-    }catch(error){
-      console.log("*********", error)
-      let errorsArray = []
-      error.errors.forEach(e=> errorsArray.push(e.message))
-      error.errorsArray = errorsArray
+      }catch(error){
+        let errorsArray = []
+        error.errors.forEach(e=> errorsArray.push(e.message))
+        error.errorsArray = errorsArray
 
-      if(error.name==="SequelizeValidationError"){
-        error.status = 400
+        if(error.name==="SequelizeValidationError"){
+          error.status = 400
+        }
+
+        next(error); 
       }
-
-      next(error); 
+    } else {
+      return res.status(400).json({
+        message: 'Must send fields to update',
+      });
     }
+    
   }else{
     return res.status(404).json({
       message: 'Course Not Found',
@@ -248,15 +268,21 @@ app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next)
   }
 }))
 
-//
+//owner of a course can delete the course
 app.delete('/api/courses/:id', authenticateUser, asyncHandler(async(req, res,next) => {
   const courseToDelete = await Course.findByPk(req.params.id)
   if(courseToDelete){
-    try{
-      await courseToDelete.destroy()
-      return res.status(204).json({})
-    }catch(error){
-      next(error);
+    if(courseToDelete.dataValues.userId === req.currentUser.id){
+      try{
+        await courseToDelete.destroy()
+        return res.status(204).json({})
+      }catch(error){
+        next(error);
+      }
+    }else{
+      return res.status(403).json({
+      message: 'Current User doesn\'t own selected course'
+    });
     }
   }else{
     return res.status(404).json({
