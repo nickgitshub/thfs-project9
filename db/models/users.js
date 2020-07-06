@@ -5,10 +5,10 @@ module.exports = (sequelize) => {
 	User.init(
 		{
 			id: {type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true},
-			firstName: {type: Sequelize.STRING, allowNull: false, validate: { notEmpty: {msg: "Please provide First Name"}}},
-			lastName: {type: Sequelize.STRING, allowNull: false, validate: { notEmpty: {msg: "Please provide Last Name"}}},
-			emailAddress: {type: Sequelize.STRING, allowNull: false, validate: { isEmail: {msg: "Please provide a valid email address"}}},
-			password: {type: Sequelize.STRING, allowNull: false, validate: { notEmpty: {msg: "Please provide a password"}}},
+			firstName: {type: Sequelize.STRING, allowNull: false, validate: { notEmpty: {msg: "Please provide First Name"}, notNull:{msg:"First Name cannot be null"}}},
+			lastName: {type: Sequelize.STRING, allowNull: false, validate: { notEmpty: {msg: "Please provide Last Name"}, notNull:{msg:"Last Name cannot be null"}}},
+			emailAddress: {type: Sequelize.STRING, allowNull: false, unique:true, validate: { isEmail: {msg: "Please provide a valid email address"}, notNull:{msg:"Email address cannot be null"}}},
+			password: {type: Sequelize.STRING, allowNull: false, validate: { notEmpty: {msg: "Please provide a Password"}, notNull:{msg:"Password cannot be null"}}},
 			createdAt: {type: Sequelize.DATE, allowNull: false},
 			updatedAt: {type: Sequelize.DATE, allowNull: false},
 		},

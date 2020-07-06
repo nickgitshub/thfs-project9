@@ -8,8 +8,6 @@ const bodyParser = require('body-parser');
 const bcryptjs = require('bcryptjs');
 const auth = require('basic-auth');
 
-
-
 // variable to enable global error logging
 const enableGlobalErrorLogging = process.env.ENABLE_GLOBAL_ERROR_LOGGING === 'true';
 
@@ -127,6 +125,7 @@ app.get('/api/users', authenticateUser, asyncHandler(async(req, res) => {
 app.post('/api/users', asyncHandler(async(req, res, next) => {
   const newUser = req.body
 
+  //hashing the password
   if(newUser.password){
     newUser.password = bcryptjs.hashSync(newUser.password)
   }
@@ -147,7 +146,14 @@ app.post('/api/users', asyncHandler(async(req, res, next) => {
 
     if(error.name==="SequelizeValidationError"){
       error.status = 400
+      error.message = error.errors[0].message
     }
+
+    if(error.name==="SequelizeUniqueConstraintError"){
+      error.status = 400
+      error.message = "Email address must be different for each user"
+    }
+
     next(error)
   }
 
@@ -221,6 +227,7 @@ app.post('/api/courses', authenticateUser, asyncHandler(async(req, res, next) =>
 
     if(error.name==="SequelizeValidationError"){
       error.status = 400
+      error.message = error.errors[0].message
     }
     
     next(error)
@@ -251,6 +258,7 @@ app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next)
 
         if(error.name==="SequelizeValidationError"){
           error.status = 400
+          error.message = error.errors[0].message
         }
 
         next(error); 
@@ -305,6 +313,7 @@ app.use((req, res) => {
 
 // setup a global error handler
 app.use((err, req, res, next) => {
+  console.log(err)
   if (enableGlobalErrorLogging) {
     console.error(`Global error handler: ${JSON.stringify(err.stack)}`);
   }
