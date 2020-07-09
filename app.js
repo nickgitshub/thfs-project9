@@ -244,7 +244,6 @@ app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next)
   //checks that body of the request is not empty
   //validation of what it is in the body will be run on the model
   if(courseToUpdate){
-    console.log(req.body.userId)
     if(Object.entries(req.body).length > 0){
       if(courseToUpdate.dataValues.userId === req.currentUser.id){
         try{
@@ -321,7 +320,7 @@ app.use((req, res) => {
 
 // setup a global error handler
 app.use((err, req, res, next) => {
-  console.log(err)
+
   if (enableGlobalErrorLogging) {
     console.error(`Global error handler: ${JSON.stringify(err.stack)}`);
   }
