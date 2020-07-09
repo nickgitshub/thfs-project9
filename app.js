@@ -219,7 +219,8 @@ app.post('/api/courses', authenticateUser, asyncHandler(async(req, res, next) =>
       createdAt: getDate(),
       updatedAt: getDate(),
     })
-    return res.status(201).location(`/api/courses/${req.params.id}`).json({})
+
+    return res.status(201).location(`/api/courses/${newCourse.id}`).json({})
   }catch(error){
     let errorsArray = []
     error.errors.forEach(e=> errorsArray.push(e.message))
@@ -243,25 +244,32 @@ app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next)
   //checks that body of the request is not empty
   //validation of what it is in the body will be run on the model
   if(courseToUpdate){
+    console.log(req.body.userId)
     if(Object.entries(req.body).length > 0){
-      try{
-        await courseToUpdate.update({
-          ...req.body,
-          updatedAt: getDate(),
-        })
-        return res.status(204).json({});
+      if(courseToUpdate.dataValues.userId === req.currentUser.id){
+        try{
+          await courseToUpdate.update({
+            ...req.body,
+            updatedAt: getDate(),
+          })
+          return res.status(204).json({});
 
-      }catch(error){
-        let errorsArray = []
-        error.errors.forEach(e=> errorsArray.push(e.message))
-        error.errorsArray = errorsArray
+        }catch(error){
+          let errorsArray = []
+          error.errors.forEach(e=> errorsArray.push(e.message))
+          error.errorsArray = errorsArray
 
-        if(error.name==="SequelizeValidationError"){
-          error.status = 400
-          error.message = error.errors[0].message
+          if(error.name==="SequelizeValidationError"){
+            error.status = 400
+            error.message = error.errors[0].message
+          }
+
+          next(error); 
         }
-
-        next(error); 
+      }else{
+        return res.status(403).json({
+          message: 'Current User doesn\'t own selected course'
+        });
       }
     } else {
       return res.status(400).json({
@@ -289,8 +297,8 @@ app.delete('/api/courses/:id', authenticateUser, asyncHandler(async(req, res,nex
       }
     }else{
       return res.status(403).json({
-      message: 'Current User doesn\'t own selected course'
-    });
+        message: 'Current User doesn\'t own selected course'
+      });
     }
   }else{
     return res.status(404).json({
