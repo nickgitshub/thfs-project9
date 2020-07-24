@@ -7,6 +7,7 @@ const Sequelize = require('sequelize');
 const bodyParser = require('body-parser');
 const bcryptjs = require('bcryptjs');
 const auth = require('basic-auth');
+const cors = require('cors')
 
 // variable to enable global error logging
 const enableGlobalErrorLogging = process.env.ENABLE_GLOBAL_ERROR_LOGGING === 'true';
@@ -32,6 +33,10 @@ const { User, Course } = db.models;
     console.log('Error connecting to the database', error);
   }
 })()
+
+
+//enable CORS request
+app.use(cors())
 
 // setup morgan which gives us http request logging
 app.use(morgan('dev'));
@@ -84,14 +89,20 @@ const authenticateUser = asyncHandler(async(req, res, next) => {
     if(currentUser){
       const authenticated = bcryptjs.compareSync(credentials.pass, currentUser.password);
       if(authenticated){
-        console.log(`Authentication successful for username: ${currentUser.emailAddress}`);
+        console.log(`Authentication successful for email: ${currentUser.emailAddress}`);
         req.currentUser = currentUser;
+
       }else{
-        message = `Authentication failure for username: ${currentUser.emailAddress}`;
+        message = `Incorrect password for email: ${currentUser.emailAddress}`;
       }
 
     } else {
-      message = `User not found for username: ${credentials.name}`;
+      if(credentials.name === ""){
+        message = `Must enter an email address`;
+      } else {
+        message = `${credentials.name} is not a user email address`;
+      }
+      
     }
   } else {
     message = 'Auth header not found'
@@ -99,7 +110,7 @@ const authenticateUser = asyncHandler(async(req, res, next) => {
 
   if(message){
     console.warn(message);
-    res.status(401).json({ message: 'Access Denied' });
+    res.status(401).json({ errors: [message] });
   }else{
     next()
   }
@@ -114,11 +125,12 @@ USER ROUTES
 app.get('/api/users', authenticateUser, asyncHandler(async(req, res) => {
   const currentUser = req.currentUser
   res.json({
+    userId: currentUser.id,
     firstName: currentUser.firstName,
     lastName: currentUser.lastName,
     emailAddress: currentUser.emailAddress,
+    password: currentUser.password
   })
-
 }))
 
 //create user
@@ -162,13 +174,6 @@ app.post('/api/users', asyncHandler(async(req, res, next) => {
 /************
 COURSE ROUTES
 *************/
-
-// setup a friendly greeting for the root route
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to the REST API project!',
-  });
-});
 
 //Returns a list of all courses (including the user that owns each course)
 app.get('/api/courses', asyncHandler(async(req, res) => {
@@ -220,7 +225,7 @@ app.post('/api/courses', authenticateUser, asyncHandler(async(req, res, next) =>
       updatedAt: getDate(),
     })
 
-    return res.status(201).location(`/api/courses/${newCourse.id}`).json({})
+    return res.status(201).location(`/api/courses/${newCourse.id}`).json({courseLocation: `/courses/${newCourse.id}`})
   }catch(error){
     let errorsArray = []
     error.errors.forEach(e=> errorsArray.push(e.message))
@@ -245,7 +250,7 @@ app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next)
   //validation of what it is in the body will be run on the model
   if(courseToUpdate){
     if(Object.entries(req.body).length > 0){
-      if(courseToUpdate.dataValues.userId === req.currentUser.id){
+      if(courseToUpdate.userId === req.currentUser.id){
         try{
           await courseToUpdate.update({
             ...req.body,
@@ -267,18 +272,18 @@ app.put('/api/courses/:id', authenticateUser, asyncHandler(async(req, res, next)
         }
       }else{
         return res.status(403).json({
-          message: 'Current User doesn\'t own selected course'
+          errors: ['Only owner of a course can update it']
         });
       }
     } else {
       return res.status(400).json({
-        message: 'Must send fields to update',
+        errors: ['Must send fields to update'],
       });
     }
     
   }else{
     return res.status(404).json({
-      message: 'Course Not Found',
+      errors: ['Course does not exist and cannot be updated'],
     });
   }
 }))
@@ -296,12 +301,12 @@ app.delete('/api/courses/:id', authenticateUser, asyncHandler(async(req, res,nex
       }
     }else{
       return res.status(403).json({
-        message: 'Current User doesn\'t own selected course'
+        errors: ['Cannot be deleted as this is not the current user\'s course']
       });
     }
   }else{
     return res.status(404).json({
-      message: 'Course Not Found',
+      errors: ['Course not found'],
     });
   }
 
